@@ -97,3 +97,9 @@ if file:
         # Raw data
         st.subheader("📄 Daily Aggregated Data")
         st.dataframe(daily_usage)
+
+# --- Footer ---
+st.markdown(
+    "<hr><p style='text-align:center;font-size:14px;'>Created by Dravin S | Email: dravin.drickpaul2@gmail.com</p>",
+    unsafe_allow_html=True
+)
