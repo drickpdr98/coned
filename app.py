@@ -4,9 +4,12 @@ import pandas as pd
 # --- Page Config ---
 st.set_page_config(page_title="ConEd Usage Analyzer", layout="centered")
 
-# --- Centered Title ---
-st.markdown("<h1 style='text-align: center;'>⚡ Con Edison Usage & Bill Estimator</h1>", unsafe_allow_html=True)
-st.write("Upload your ConEd CSV file to see your usage and cost.")
+# --- Centered Title in one long line ---
+st.markdown(
+    "<h1 style='text-align: center;'>⚡ Con Edison Electricity Usage & Full Bill Estimator (Supply + Delivery + Taxes)</h1>",
+    unsafe_allow_html=True
+)
+st.write("Upload your ConEd CSV file with 15-minute interval data to see your usage and estimated cost.")
 
 file = st.file_uploader("Upload CSV", type=["csv"])
 
@@ -26,6 +29,10 @@ DELIVERY_SALES_TAX_RATE = 0.045       # 4.5%
 if file:
     df = pd.read_csv(file)
 
+    # --- Rename Date column to 15 Min Interval ---
+    if 'Date' in df.columns:
+        df.rename(columns={'Date': '15 Min Interval'}, inplace=True)
+    
     # Detect usage column
     usage_col = None
     for col in df.columns:
@@ -36,9 +43,9 @@ if file:
     if not usage_col:
         st.error("Could not find kWh column.")
     else:
-        # --- Handle Date column (15-min intervals) ---
-        if 'Date' in df.columns:
-            df['DateTime'] = pd.to_datetime(df['Date'], errors='coerce')
+        # --- Handle 15-minute interval column ---
+        if '15 Min Interval' in df.columns:
+            df['DateTime'] = pd.to_datetime(df['15 Min Interval'], errors='coerce')
             df = df.dropna(subset=['DateTime'])
             df['Date'] = df['DateTime'].dt.date
 
@@ -46,19 +53,19 @@ if file:
             daily_usage = df.groupby('Date')[usage_col].sum().reset_index()
             total_days = len(daily_usage)
         else:
-            st.warning("No Date column found. Counting rows as days.")
+            st.warning("No 15 Min Interval column found. Counting rows as days.")
             total_days = len(df)
             daily_usage = df[[usage_col]].copy()
             daily_usage['Date'] = range(1, total_days + 1)
 
-        # --- Supply Charges ---
+        # --- Calculate Supply Charges ---
         daily_usage['Supply_Charge'] = daily_usage[usage_col] * SUPPLY_RATE
         total_supply = daily_usage['Supply_Charge'].sum()
         total_supply_with_fixed = total_supply + MERCHANT_FUNCTION_CHARGE + SUPPLY_GRT_OTHER
         supply_sales_tax = total_supply_with_fixed * SUPPLY_SALES_TAX_RATE
         total_supply_bill = total_supply_with_fixed + supply_sales_tax
 
-        # --- Delivery Charges ---
+        # --- Calculate Delivery Charges ---
         daily_usage['Delivery_Charge'] = daily_usage[usage_col] * DELIVERY_RATE
         daily_usage['System_Benefit_Charge'] = daily_usage[usage_col] * SYSTEM_BENEFIT_CHARGE
         total_delivery = (
