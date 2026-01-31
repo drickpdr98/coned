@@ -25,24 +25,32 @@ if file:
     if not usage_col:
         st.error("Could not find kWh column.")
     else:
-        # Ensure Date column exists and is datetime
+        # --- Ensure Date column exists ---
         if 'Date' in df.columns:
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-            # Remove any rows with invalid dates
+            # Parse date, ignore time
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
+            # Remove invalid dates
             df = df.dropna(subset=['Date'])
-            # Count unique calendar days
-            total_days = df['Date'].dt.date.nunique()
+            
+            # Sum usage per day
+            daily_usage = df.groupby('Date')[usage_col].sum().reset_index()
+            
+            # Number of unique days is now length of daily_usage
+            total_days = len(daily_usage)
         else:
+            # If no date column, just count rows
             total_days = len(df)
+            daily_usage = df[[usage_col]].copy()
+            daily_usage['Date'] = range(1, total_days+1)
 
         # Calculate charges
-        df['Supply_Charge'] = df[usage_col] * SUPPLY_RATE
-        df['Delivery_Charge'] = df[usage_col] * DELIVERY_RATE
-        df['Daily_Total'] = df['Supply_Charge'] + df['Delivery_Charge']
+        daily_usage['Supply_Charge'] = daily_usage[usage_col] * SUPPLY_RATE
+        daily_usage['Delivery_Charge'] = daily_usage[usage_col] * DELIVERY_RATE
+        daily_usage['Daily_Total'] = daily_usage['Supply_Charge'] + daily_usage['Delivery_Charge']
 
-        total_kwh = df[usage_col].sum()
-        total_supply = df['Supply_Charge'].sum()
-        total_delivery = df['Delivery_Charge'].sum()
+        total_kwh = daily_usage[usage_col].sum()
+        total_supply = daily_usage['Supply_Charge'].sum()
+        total_delivery = daily_usage['Delivery_Charge'].sum()
         total_bill = total_supply + total_delivery + OTHER_FEES
 
         st.success("File Uploaded and Calculated!")
@@ -54,10 +62,10 @@ if file:
         st.metric("Other Fees ($)", f"${OTHER_FEES}")
         st.metric("Estimated Total Bill ($)", f"${round(total_bill, 2)}")
 
-        if "Date" in df.columns:
-            daily = df.groupby(df['Date'].dt.date)[usage_col].sum()
-            st.subheader("📅 Daily Usage")
-            st.line_chart(daily)
+        # Daily usage chart
+        st.subheader("📅 Daily Usage")
+        st.line_chart(daily_usage.set_index('Date')[usage_col])
 
+        # Raw data
         st.subheader("📄 Raw Data")
-        st.dataframe(df)
+        st.dataframe(daily_usage)
