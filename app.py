@@ -7,10 +7,18 @@ st.write("Upload your ConEd CSV file to see your usage and cost.")
 
 file = st.file_uploader("Upload CSV", type=["csv"])
 
-# NYC Rates
-SUPPLY_RATE = 0.13
-DELIVERY_RATE = 0.10
-OTHER_FEES = 7
+# --- Supply components ---
+SUPPLY_RATE = 0.11736                 # $ per kWh
+MERCHANT_FUNCTION_CHARGE = 3.36       # $ fixed
+SUPPLY_GRT_OTHER = 2.61                # $ fixed
+SUPPLY_SALES_TAX_RATE = 0.045         # 4.5%
+
+# --- Delivery components ---
+BASIC_SERVICE_CHARGE = 21.28          # $ fixed
+DELIVERY_RATE = 0.17192               # $ per kWh
+SYSTEM_BENEFIT_CHARGE = 0.00453       # $ per kWh
+DELIVERY_GRT_OTHER = 8.60             # $ fixed
+DELIVERY_SALES_TAX_RATE = 0.045       # 4.5%
 
 if file:
     df = pd.read_csv(file)
@@ -27,16 +35,10 @@ if file:
     else:
         # --- Handle Date column ---
         if 'Date' in df.columns:
-            # Parse dates, ignore time
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-            # Drop invalid dates
             df = df.dropna(subset=['Date'])
-            
-            # Get unique calendar dates
             unique_dates = pd.Series(df['Date'].dt.date.unique())
             total_days = len(unique_dates)
-
-            # Sum usage per day for the chart
             daily_usage = df.groupby(df['Date'].dt.date)[usage_col].sum().reset_index()
         else:
             st.warning("No Date column found. Counting rows as days.")
@@ -44,23 +46,35 @@ if file:
             daily_usage = df[[usage_col]].copy()
             daily_usage['Date'] = range(1, total_days+1)
 
-        # Calculate charges
+        # --- Calculate Supply Charges ---
         daily_usage['Supply_Charge'] = daily_usage[usage_col] * SUPPLY_RATE
-        daily_usage['Delivery_Charge'] = daily_usage[usage_col] * DELIVERY_RATE
-        daily_usage['Daily_Total'] = daily_usage['Supply_Charge'] + daily_usage['Delivery_Charge']
-
-        total_kwh = daily_usage[usage_col].sum()
         total_supply = daily_usage['Supply_Charge'].sum()
-        total_delivery = daily_usage['Delivery_Charge'].sum()
-        total_bill = total_supply + total_delivery + OTHER_FEES
+        total_supply_with_fixed = total_supply + MERCHANT_FUNCTION_CHARGE + SUPPLY_GRT_OTHER
+        supply_sales_tax = total_supply_with_fixed * SUPPLY_SALES_TAX_RATE
+        total_supply_bill = total_supply_with_fixed + supply_sales_tax
+
+        # --- Calculate Delivery Charges ---
+        daily_usage['Delivery_Charge'] = daily_usage[usage_col] * DELIVERY_RATE
+        daily_usage['System_Benefit_Charge'] = daily_usage[usage_col] * SYSTEM_BENEFIT_CHARGE
+        total_delivery = (
+            daily_usage['Delivery_Charge'].sum() +
+            daily_usage['System_Benefit_Charge'].sum() +
+            BASIC_SERVICE_CHARGE +
+            DELIVERY_GRT_OTHER
+        )
+        delivery_sales_tax = total_delivery * DELIVERY_SALES_TAX_RATE
+        total_delivery_bill = total_delivery + delivery_sales_tax
+
+        # --- Total Bill ---
+        total_kwh = daily_usage[usage_col].sum()
+        total_bill = total_supply_bill + total_delivery_bill
 
         st.success("File Uploaded and Calculated!")
 
         st.metric("Total Usage (kWh)", round(total_kwh, 2))
         st.metric("Number of Days Used", total_days)
-        st.metric("Supply Charges ($)", f"${round(total_supply, 2)}")
-        st.metric("Delivery Charges ($)", f"${round(total_delivery, 2)}")
-        st.metric("Other Fees ($)", f"${OTHER_FEES}")
+        st.metric("Supply Charges ($)", f"${round(total_supply_bill, 2)}")
+        st.metric("Delivery Charges ($)", f"${round(total_delivery_bill, 2)}")
         st.metric("Estimated Total Bill ($)", f"${round(total_bill, 2)}")
 
         # Daily usage chart
