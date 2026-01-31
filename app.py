@@ -10,7 +10,7 @@ st.write("Upload your ConEd CSV file to see your usage and cost.")
 # Upload
 file = st.file_uploader("Upload CSV", type=["csv"])
 
-RATE = 0.27  # Your average $/kWh
+RATE = 0.30  # Your average $/kWh
 
 if file:
     df = pd.read_csv(file)
