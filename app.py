@@ -1,8 +1,11 @@
 import streamlit as st
 import pandas as pd
 
+# --- Page Config ---
 st.set_page_config(page_title="ConEd Usage Analyzer", layout="centered")
-st.title("⚡ Con Edison Usage & Bill Estimator")
+
+# --- Centered Title ---
+st.markdown("<h1 style='text-align: center;'>⚡ Con Edison Usage & Bill Estimator</h1>", unsafe_allow_html=True)
 st.write("Upload your ConEd CSV file to see your usage and cost.")
 
 file = st.file_uploader("Upload CSV", type=["csv"])
@@ -33,27 +36,29 @@ if file:
     if not usage_col:
         st.error("Could not find kWh column.")
     else:
-        # --- Handle Date column ---
+        # --- Handle Date column (15-min intervals) ---
         if 'Date' in df.columns:
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-            df = df.dropna(subset=['Date'])
-            unique_dates = pd.Series(df['Date'].dt.date.unique())
-            total_days = len(unique_dates)
-            daily_usage = df.groupby(df['Date'].dt.date)[usage_col].sum().reset_index()
+            df['DateTime'] = pd.to_datetime(df['Date'], errors='coerce')
+            df = df.dropna(subset=['DateTime'])
+            df['Date'] = df['DateTime'].dt.date
+
+            # Aggregate 15-min readings into daily usage
+            daily_usage = df.groupby('Date')[usage_col].sum().reset_index()
+            total_days = len(daily_usage)
         else:
             st.warning("No Date column found. Counting rows as days.")
             total_days = len(df)
             daily_usage = df[[usage_col]].copy()
-            daily_usage['Date'] = range(1, total_days+1)
+            daily_usage['Date'] = range(1, total_days + 1)
 
-        # --- Calculate Supply Charges ---
+        # --- Supply Charges ---
         daily_usage['Supply_Charge'] = daily_usage[usage_col] * SUPPLY_RATE
         total_supply = daily_usage['Supply_Charge'].sum()
         total_supply_with_fixed = total_supply + MERCHANT_FUNCTION_CHARGE + SUPPLY_GRT_OTHER
         supply_sales_tax = total_supply_with_fixed * SUPPLY_SALES_TAX_RATE
         total_supply_bill = total_supply_with_fixed + supply_sales_tax
 
-        # --- Calculate Delivery Charges ---
+        # --- Delivery Charges ---
         daily_usage['Delivery_Charge'] = daily_usage[usage_col] * DELIVERY_RATE
         daily_usage['System_Benefit_Charge'] = daily_usage[usage_col] * SYSTEM_BENEFIT_CHARGE
         total_delivery = (
@@ -69,6 +74,7 @@ if file:
         total_kwh = daily_usage[usage_col].sum()
         total_bill = total_supply_bill + total_delivery_bill
 
+        # --- Display Metrics ---
         st.success("File Uploaded and Calculated!")
 
         st.metric("Total Usage (kWh)", round(total_kwh, 2))
@@ -78,9 +84,9 @@ if file:
         st.metric("Estimated Total Bill ($)", f"${round(total_bill, 2)}")
 
         # Daily usage chart
-        st.subheader("📅 Daily Usage")
+        st.subheader("📅 Daily Usage (summed from 15-min intervals)")
         st.line_chart(daily_usage.set_index('Date')[usage_col])
 
         # Raw data
-        st.subheader("📄 Raw Data")
+        st.subheader("📄 Daily Aggregated Data")
         st.dataframe(daily_usage)
