@@ -41,19 +41,21 @@ if file:
         stringio.seek(0)  # reset pointer
         df_raw = pd.read_csv(stringio, skiprows=start_row)
         
-        # --- Keep only Date + usage columns ---
+        # --- Find usage and date columns ---
         usage_col_candidates = [col for col in df_raw.columns if "import" in col.lower() and "kwh" in col.lower()]
         date_col_candidates = [col for col in df_raw.columns if "date" in col.lower()]
         
+        # --- Validate columns ---
         if not usage_col_candidates:
-            st.error("Could not find a usage column like 'Import (kWh)'.")
+            st.error("Could not find a usage column like 'Import (kWh)'. Please check your CSV.")
         elif not date_col_candidates:
-            st.error("Could not find a Date column.")
+            st.error("Could not find a Date column. Please check your CSV.")
         else:
+            # --- Only process if both columns exist ---
             usage_col = usage_col_candidates[0]
             date_col = date_col_candidates[0]
             
-            df = df[[date_col, usage_col]].copy()
+            df = df_raw[[date_col, usage_col]].copy()
             df.rename(columns={date_col: '15 Min Interval'}, inplace=True)
 
             # --- Convert datetime and aggregate per day ---
