@@ -25,20 +25,21 @@ if file:
     if not usage_col:
         st.error("Could not find kWh column.")
     else:
-        # --- Ensure Date column exists ---
+        # --- Handle Date column ---
         if 'Date' in df.columns:
-            # Parse date, ignore time
-            df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
-            # Remove invalid dates
+            # Parse dates, ignore time
+            df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+            # Drop invalid dates
             df = df.dropna(subset=['Date'])
             
-            # Sum usage per day
-            daily_usage = df.groupby('Date')[usage_col].sum().reset_index()
-            
-            # Number of unique days is now length of daily_usage
-            total_days = len(daily_usage)
+            # Get unique calendar dates
+            unique_dates = pd.Series(df['Date'].dt.date.unique())
+            total_days = len(unique_dates)
+
+            # Sum usage per day for the chart
+            daily_usage = df.groupby(df['Date'].dt.date)[usage_col].sum().reset_index()
         else:
-            # If no date column, just count rows
+            st.warning("No Date column found. Counting rows as days.")
             total_days = len(df)
             daily_usage = df[[usage_col]].copy()
             daily_usage['Date'] = range(1, total_days+1)
